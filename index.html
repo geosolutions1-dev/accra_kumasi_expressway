@@ -53,68 +53,122 @@
             font-size: 11px;
             pointer-events: none;
         }
-        /* Custom search box styling - positioned on left side */
-        .custom-search-container {
+        /* ============================================
+           EXPANDABLE SEARCH BOX - Left Side
+        ============================================ */
+        .expandable-search {
             position: absolute;
             top: 200px;
             left: 10px;
             z-index: 1000;
             background: white;
-            border-radius: 4px;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-            padding: 2px;
-            width: 260px;
+            border-radius: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            transition: all 0.3s ease;
+            width: 46px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .expandable-search.expanded {
+            width: 280px;
+            border-radius: 12px;
+        }
+        .search-icon {
+            width: 46px;
+            height: 46px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 20px;
+        }
+        .search-icon:hover {
+            background: #f0f0f0;
+        }
+        .search-input-wrapper {
+            padding: 8px 12px 12px 12px;
+            display: none;
+        }
+        .expandable-search.expanded .search-input-wrapper {
+            display: block;
+        }
+        .expandable-search.expanded .search-icon {
+            width: 100%;
+            border-radius: 12px 12px 0 0;
+            background: #4169E1;
+            color: white;
+            justify-content: space-between;
+            padding: 0 15px;
+            box-sizing: border-box;
+        }
+        .expandable-search.expanded .search-icon span:first-child {
+            font-weight: bold;
+        }
+        .close-search {
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .close-search:hover {
+            opacity: 0.8;
         }
         .custom-search-input {
-            border: 1px solid #ccc;
-            border-radius: 3px;
-            padding: 8px 10px;
-            width: 240px;
-            font-size: 12px;
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+            transition: border 0.2s;
         }
         .custom-search-input:focus {
-            outline: none;
             border-color: #4169E1;
         }
         .search-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 1px solid #ccc;
-            border-radius: 4px;
             max-height: 250px;
             overflow-y: auto;
+            margin-top: 8px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #eee;
             display: none;
-            z-index: 1001;
+        }
+        .search-results.show {
+            display: block;
         }
         .search-result-item {
-            padding: 8px 12px;
+            padding: 10px 12px;
             cursor: pointer;
             border-bottom: 1px solid #eee;
-            font-size: 12px;
+            font-size: 13px;
+            transition: background 0.2s;
         }
         .search-result-item:hover {
-            background-color: #f0f0f0;
+            background-color: #f5f5f5;
         }
-        .search-result-item strong {
-            color: #4169E1;
+        .search-result-item:last-child {
+            border-bottom: none;
         }
-        .search-result-item .type-badge {
+        .type-badge {
             display: inline-block;
             background-color: #4169E1;
             color: white;
-            padding: 2px 6px;
-            border-radius: 3px;
+            padding: 2px 8px;
+            border-radius: 20px;
             font-size: 10px;
-            margin-right: 8px;
+            margin-right: 10px;
+            font-weight: normal;
         }
-        .search-result-item .type-badge.interchange {
-            background-color: #4169E1;
-        }
-        .search-result-item .type-badge.major {
+        .type-badge.major {
             background-color: #ff4444;
+        }
+        .no-results {
+            padding: 10px 12px;
+            color: #999;
+            text-align: center;
         }
         /* Adjust left controls spacing */
         .leaflet-left .leaflet-control {
@@ -127,14 +181,20 @@
     <body>
         <div id="map"></div>
         
-        <!-- Custom Search Box - Positioned on Left Side -->
-        <div class="custom-search-container">
-            <input type="text" id="searchInput" class="custom-search-input" placeholder="🔍 Search Interchange or Major Feature...">
-            <div id="searchResults" class="search-results"></div>
+        <!-- Expandable Search Box -->
+        <div class="expandable-search" id="expandableSearch">
+            <div class="search-icon" id="searchIcon">
+                <span>🔍</span>
+                <span class="close-search" id="closeSearch" style="display:none;">✕</span>
+            </div>
+            <div class="search-input-wrapper">
+                <input type="text" id="searchInput" class="custom-search-input" placeholder="Search Interchange or Major Feature..." autocomplete="off">
+                <div id="searchResults" class="search-results"></div>
+            </div>
         </div>
         
         <div class="info-panel" id="infoPanel">
-            📍 Click on any point for details | 🔍 Type in search box to find Interchanges & Major Features
+            📍 Click on any point for details | 🔍 Click the search icon to find Interchanges & Major Features
         </div>
         
         <script src="js/qgis2web_expressions.js"></script>
@@ -421,8 +481,37 @@
         layerControl.addTo(map);
         
         // ============================================
-        // CUSTOM SEARCH FUNCTIONALITY
+        // EXPANDABLE SEARCH FUNCTIONALITY
         // ============================================
+        var searchContainer = document.getElementById('expandableSearch');
+        var searchIcon = document.getElementById('searchIcon');
+        var closeSearch = document.getElementById('closeSearch');
+        var searchInput = document.getElementById('searchInput');
+        var searchResults = document.getElementById('searchResults');
+        var currentMarker = null;
+        
+        // Expand/collapse functionality
+        searchIcon.addEventListener('click', function(e) {
+            if (!searchContainer.classList.contains('expanded')) {
+                searchContainer.classList.add('expanded');
+                searchIcon.querySelector('span:first-child').style.display = 'none';
+                closeSearch.style.display = 'inline';
+                setTimeout(function() {
+                    searchInput.focus();
+                }, 300);
+            }
+        });
+        
+        closeSearch.addEventListener('click', function(e) {
+            e.stopPropagation();
+            searchContainer.classList.remove('expanded');
+            searchIcon.querySelector('span:first-child').style.display = 'flex';
+            closeSearch.style.display = 'none';
+            searchInput.value = '';
+            searchResults.classList.remove('show');
+            searchResults.innerHTML = '';
+        });
+        
         // Build search index from Interchange and Major Features
         var searchIndex = [];
         
@@ -454,17 +543,13 @@
             }
         });
         
-        // Search functionality
-        var searchInput = document.getElementById('searchInput');
-        var searchResults = document.getElementById('searchResults');
-        var currentMarker = null;
-        
+        // Perform search
         function performSearch() {
             var query = searchInput.value.toLowerCase().trim();
             searchResults.innerHTML = '';
             
             if (query.length === 0) {
-                searchResults.style.display = 'none';
+                searchResults.classList.remove('show');
                 return;
             }
             
@@ -473,7 +558,7 @@
             });
             
             if (matches.length > 0) {
-                searchResults.style.display = 'block';
+                searchResults.classList.add('show');
                 matches.forEach(function(match) {
                     var div = document.createElement('div');
                     div.className = 'search-result-item';
@@ -484,9 +569,12 @@
                         map.setView(match.latlng, 16);
                         // Open popup
                         match.layer.openPopup();
-                        // Clear search
+                        // Clear search and collapse
                         searchInput.value = '';
-                        searchResults.style.display = 'none';
+                        searchResults.classList.remove('show');
+                        searchContainer.classList.remove('expanded');
+                        searchIcon.querySelector('span:first-child').style.display = 'flex';
+                        closeSearch.style.display = 'none';
                         // Flash the marker
                         if (currentMarker) {
                             map.removeLayer(currentMarker);
@@ -508,25 +596,28 @@
                     searchResults.appendChild(div);
                 });
             } else {
-                searchResults.style.display = 'block';
+                searchResults.classList.add('show');
                 var noResult = document.createElement('div');
                 noResult.className = 'search-result-item';
                 noResult.innerHTML = 'No results found for "' + query + '"';
                 noResult.style.color = '#999';
+                noResult.style.cursor = 'default';
                 noResult.onclick = null;
                 searchResults.appendChild(noResult);
             }
         }
         
         searchInput.addEventListener('input', performSearch);
-        searchInput.addEventListener('blur', function() {
-            setTimeout(function() {
-                searchResults.style.display = 'none';
-            }, 200);
-        });
-        searchInput.addEventListener('focus', function() {
-            if (searchInput.value.length > 0) {
-                performSearch();
+        
+        // Close results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchContainer.contains(e.target) && searchContainer.classList.contains('expanded')) {
+                if (searchInput.value === '') {
+                    searchContainer.classList.remove('expanded');
+                    searchIcon.querySelector('span:first-child').style.display = 'flex';
+                    closeSearch.style.display = 'none';
+                    searchResults.classList.remove('show');
+                }
             }
         });
         
@@ -545,16 +636,20 @@
             var photonContainer = document.querySelector('.leaflet-photon');
             if (photonContainer) {
                 photonContainer.style.backgroundColor = 'white';
-                photonContainer.style.borderRadius = '4px';
-                photonContainer.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
-                photonContainer.style.padding = '2px';
+                photonContainer.style.borderRadius = '30px';
+                photonContainer.style.boxShadow = '0 2px 8px rgba(0,0,0,0.25)';
+                photonContainer.style.padding = '0';
                 var input = photonContainer.querySelector('input');
                 if (input) {
-                    input.style.border = '1px solid #ccc';
-                    input.style.borderRadius = '3px';
-                    input.style.padding = '6px 10px';
+                    input.style.border = 'none';
+                    input.style.borderRadius = '30px';
+                    input.style.padding = '10px 15px';
                     input.style.width = '200px';
                     input.placeholder = '🔍 Search address...';
+                }
+                var button = photonContainer.querySelector('button');
+                if (button) {
+                    button.style.borderRadius = '30px';
                 }
             }
         }, 500);
