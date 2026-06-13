@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/L.Control.Locate.min.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet-search.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        .chainage-tooltip {
+            color: #ff0000 !important;
+            font-size: 10pt !important;
+            font-weight: bold !important;
+            background: rgba(255,255,255,0.9) !important;
+            border: 1px solid #ff0000 !important;
+            border-radius: 4px !important;
+            padding: 2px 6px !important;
+            white-space: nowrap !important;
+        }
+        .feature-tooltip {
+            color: #000000 !important;
+            font-size: 10pt !important;
+            background: rgba(255,255,255,0.9) !important;
+            border: 1px solid #4169E1 !important;
+            border-radius: 4px !important;
+            padding: 2px 6px !important;
+            white-space: nowrap !important;
+        }
+        .info-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+            pointer-events: none;
+        }
+        /* Custom search box styling - positioned on left side */
+        .custom-search-container {
+            position: absolute;
+            top: 200px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            padding: 2px;
+            width: 260px;
+        }
+        .custom-search-input {
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 8px 10px;
+            width: 240px;
+            font-size: 12px;
+        }
+        .custom-search-input:focus {
+            outline: none;
+            border-color: #4169E1;
+        }
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            max-height: 250px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1001;
+        }
+        .search-result-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-size: 12px;
+        }
+        .search-result-item:hover {
+            background-color: #f0f0f0;
+        }
+        .search-result-item strong {
+            color: #4169E1;
+        }
+        .search-result-item .type-badge {
+            display: inline-block;
+            background-color: #4169E1;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            margin-right: 8px;
+        }
+        .search-result-item .type-badge.interchange {
+            background-color: #4169E1;
+        }
+        .search-result-item .type-badge.major {
+            background-color: #ff4444;
+        }
+        /* Adjust left controls spacing */
+        .leaflet-left .leaflet-control {
+            margin-left: 10px;
+            margin-top: 10px;
+        }
+        </style>
+        <title>Express Way Map - Accra to Kumasi</title>
+    </head>
+    <body>
+        <div id="map"></div>
+        
+        <!-- Custom Search Box - Positioned on Left Side -->
+        <div class="custom-search-container">
+            <input type="text" id="searchInput" class="custom-search-input" placeholder="🔍 Search Interchange or Major Feature...">
+            <div id="searchResults" class="search-results"></div>
+        </div>
+        
+        <div class="info-panel" id="infoPanel">
+            📍 Click on any point for details | 🔍 Type in search box to find Interchanges & Major Features
+        </div>
+        
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/L.Control.Locate.min.js"></script>
+        <script src="js/multi-style-layer.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="js/leaflet-search.js"></script>
+        
+        <!-- DATA LAYERS -->
+        <script src="data/CorridorClose_2.js"></script>
+        <script src="data/greenlands_3.js"></script>
+        <script src="data/Facility_1_4.js"></script>
+        <script src="data/ParkingArea_5.js"></script>
+        <script src="data/SportsFacility_6.js"></script>
+        <script src="data/Facility_7.js"></script>
+        <script src="data/ExpressWayCorridor_8.js"></script>
+        <script src="data/RoadMainCentreLine_9.js"></script>
+        <script src="data/main_centerline_wgs84_10.js"></script>
+        <script src="data/CenterLineChainage_11.js"></script>
+        <script src="data/centreline_segements_12.js"></script>
+        <script src="data/StartofExpressWay_13.js"></script>
+        <script src="data/CentreLineandInterchange_14.js"></script>
+        <script src="data/Road_CL_15.js"></script>
+        <script src="data/MajorFeatures_16.js"></script>
+        <script src="data/Interchange_17.js"></script>
+        
+        <script>
+        // Initialize map
+        var map = L.map('map', {
+            zoomControl: false,
+            maxZoom: 28,
+            minZoom: 1
+        }).fitBounds([[5.666446708482121, -0.41021547080597287], [5.6849670438383635, -0.37637944239108423]]);
+        
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('qgis2web &middot; Leaflet &middot; QGIS');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        
+        // Add zoom control to topleft
+        L.control.zoom({ position: 'topleft' }).addTo(map);
+        
+        // Add locate control
+        L.control.locate({ 
+            locateOptions: { maxZoom: 19 }, 
+            position: 'topleft',
+            strings: { title: 'Show my location' }
+        }).addTo(map);
+        
+        // Add measure control
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        
+        // Add scale bar
+        L.control.scale({ metric: true, imperial: true, position: 'bottomleft' }).addTo(map);
+        
+        var bounds_group = new L.featureGroup([]);
+        
+        // Base Maps
+        var layer_OpenStreetMap_0 = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+            maxZoom: 19
+        });
+        map.addLayer(layer_OpenStreetMap_0);
+        
+        var layer_EsriSatellite_1 = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '© Esri'
+        });
+        
+        // Define all layers
+        var layer_CorridorClose_2 = L.geoJson(json_CorridorClose_2, {
+            style: { color: 'rgba(164,113,88,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_CorridorClose_2);
+        map.addLayer(layer_CorridorClose_2);
+        
+        var layer_greenlands_3 = L.geoJson(json_greenlands_3, {
+            style: { color: 'rgba(35,35,35,1.0)', weight: 1, fillColor: 'rgba(231,113,72,1.0)', fillOpacity: 1 }
+        });
+        bounds_group.addLayer(layer_greenlands_3);
+        map.addLayer(layer_greenlands_3);
+        
+        var layer_Facility_1_4 = L.geoJson(json_Facility_1_4, {
+            style: { color: 'rgba(141,90,153,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_Facility_1_4);
+        map.addLayer(layer_Facility_1_4);
+        
+        var layer_ParkingArea_5 = L.geoJson(json_ParkingArea_5, {
+            style: { color: 'rgba(190,178,151,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_ParkingArea_5);
+        map.addLayer(layer_ParkingArea_5);
+        
+        var layer_SportsFacility_6 = L.geoJson(json_SportsFacility_6, {
+            style: { color: 'rgba(229,182,54,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_SportsFacility_6);
+        map.addLayer(layer_SportsFacility_6);
+        
+        var layer_Facility_7 = L.geoJson(json_Facility_7, {
+            style: { color: 'rgba(190,207,80,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_Facility_7);
+        map.addLayer(layer_Facility_7);
+        
+        var layer_ExpressWayCorridor_8 = L.geoJson(json_ExpressWayCorridor_8, {
+            style: { color: 'rgba(0,0,0,1.0)', weight: 3 }
+        });
+        bounds_group.addLayer(layer_ExpressWayCorridor_8);
+        map.addLayer(layer_ExpressWayCorridor_8);
+        
+        var layer_RoadMainCentreLine_9 = L.geoJson(json_RoadMainCentreLine_9, {
+            style: { color: 'rgba(243,166,178,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_RoadMainCentreLine_9);
+        map.addLayer(layer_RoadMainCentreLine_9);
+        
+        var layer_main_centerline_wgs84_10 = L.geoJson(json_main_centerline_wgs84_10, {
+            style: { color: 'rgba(183,72,75,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_main_centerline_wgs84_10);
+        map.addLayer(layer_main_centerline_wgs84_10);
+        
+        // CHAINAGE LAYER - Reduced size (radius 3)
+        var layer_CenterLineChainage_11 = L.geoJson(json_CenterLineChainage_11, {
+            pointToLayer: function(feature, latlng) {
+                return L.circleMarker(latlng, {
+                    radius: 3,
+                    color: '#ff0000',
+                    weight: 2,
+                    fillColor: '#ffffff',
+                    fillOpacity: 1
+                });
+            },
+            onEachFeature: function(feature, layer) {
+                var chainage = feature.properties.chainage_l || 'N/A';
+                var lat = feature.properties.Latitude ? parseFloat(feature.properties.Latitude).toFixed(6) : 'N/A';
+                var lng = feature.properties.Longitude ? parseFloat(feature.properties.Longitude).toFixed(6) : 'N/A';
+                var distance = feature.properties.distance ? Math.round(feature.properties.distance).toLocaleString() : 'N/A';
+                var cleanChainage = String(chainage).replace('Km', '').trim();
+                
+                var popupHtml = '<div style="font-family: Arial, sans-serif; min-width: 220px;">' +
+                    '<div style="background-color: #ff4444; color: white; padding: 8px; margin: -12px -12px 10px -12px; border-radius: 4px 4px 0 0; font-weight: bold; text-align: center;">📍 Chainage: ' + cleanChainage + '</div>' +
+                    '<table style="width:100%;">' +
+                    '<tr><td style="padding: 5px;"><strong>📍 Chainage:</strong></td><td style="padding: 5px;">' + cleanChainage + '</td>' +
+                    '<tr><td style="padding: 5px;"><strong>🌐 Latitude:</strong></td><td style="padding: 5px;">' + lat + '°' + '</td>' +
+                    '<tr><td style="padding: 5px;"><strong>🌐 Longitude:</strong></td><td style="padding: 5px;">' + lng + '°' + '</td>' +
+                    '<tr><td style="padding: 5px;"><strong>📏 Distance:</strong></td><td style="padding: 5px;">' + distance + ' ft' + '</td>' +
+                    '<tr><td style="padding: 5px;"><strong>🗺️ Coordinates:</strong></td><td style="padding: 5px;">' + lat + ', ' + lng + '</td>' +
+                    '<tr><td colspan="2" style="text-align:center; padding:8px;"><div onclick="copyCoords(\'' + lat + '\', \'' + lng + '\')" style="background:#f0f0f0; padding:4px; border-radius:4px; cursor:pointer;">📋 Copy Coordinates</div>' + '</td>' +
+                    '</table></div>';
+                layer.bindPopup(popupHtml);
+            }
+        });
+        bounds_group.addLayer(layer_CenterLineChainage_11);
+        map.addLayer(layer_CenterLineChainage_11);
+        
+        var layer_centreline_segements_12 = L.geoJson(json_centreline_segements_12, {
+            style: { color: 'rgba(125,139,143,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_centreline_segements_12);
+        map.addLayer(layer_centreline_segements_12);
+        
+        var layer_StartofExpressWay_13 = L.geoJson(json_StartofExpressWay_13, {
+            style: { color: 'rgba(196,60,57,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_StartofExpressWay_13);
+        map.addLayer(layer_StartofExpressWay_13);
+        
+        var layer_CentreLineandInterchange_14 = L.geoJson(json_CentreLineandInterchange_14, {
+            style: { color: 'rgba(190,178,151,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_CentreLineandInterchange_14);
+        map.addLayer(layer_CentreLineandInterchange_14);
+        
+        var layer_Road_CL_15 = L.geoJson(json_Road_CL_15, {
+            style: { color: 'rgba(114,155,111,1.0)', weight: 1 }
+        });
+        bounds_group.addLayer(layer_Road_CL_15);
+        map.addLayer(layer_Road_CL_15);
+        
+        var layer_MajorFeatures_16 = L.geoJson(json_MajorFeatures_16, {
+            pointToLayer: function(feature, latlng) {
+                return L.circleMarker(latlng, {
+                    radius: 5,
+                    color: '#ff000a',
+                    weight: 2,
+                    fillColor: '#ffffff',
+                    fillOpacity: 1
+                });
+            },
+            onEachFeature: function(feature, layer) {
+                var name = feature.properties.Text || 'Major Feature';
+                var popupHtml = '<div style="font-family: Arial, sans-serif; min-width: 200px;">' +
+                    '<div style="background-color: #ff4444; color: white; padding: 8px; margin: -12px -12px 10px -12px; border-radius: 4px 4px 0 0; font-weight: bold;">⭐ ' + name + '</div>' +
+                    '<table style="width:100%;">' +
+                    '<tr><td style="padding: 5px;"><strong>📍 Feature:</strong></td><td style="padding: 5px;">' + name + '</td>' +
+                    '<tr><td style="padding: 5px;"><strong>🏷️ Type:</strong></td><td style="padding: 5px;">Major Feature' + '</td>' +
+                    '</table></div>';
+                layer.bindPopup(popupHtml);
+            }
+        });
+        bounds_group.addLayer(layer_MajorFeatures_16);
+        map.addLayer(layer_MajorFeatures_16);
+        
+        var layer_Interchange_17 = L.geoJson(json_Interchange_17, {
+            pointToLayer: function(feature, latlng) {
+                return L.circleMarker(latlng, {
+                    radius: 6,
+                    color: '#191970',
+                    weight: 2.5,
+                    fillColor: '#4169E1',
+                    fillOpacity: 0.8
+                });
+            },
+            onEachFeature: function(feature, layer) {
+                var name = feature.properties.Text || 'Interchange';
+                var popupHtml = '<div style="font-family: Arial, sans-serif; min-width: 200px;">' +
+                    '<div style="background-color: #4169E1; color: white; padding: 8px; margin: -12px -12px 10px -12px; border-radius: 4px 4px 0 0; font-weight: bold;">🔄 ' + name + '</div>' +
+                    '<table style="width:100%;">' +
+                    '<tr><td style="padding: 5px;"><strong>🔄 Interchange:</strong></td><td style="padding: 5px;">' + name + '</td>' +
+                    '<tr><td style="padding: 5px;"><strong>🏗️ Type:</strong></td><td style="padding: 5px;">Interchange' + '</td>' +
+                    '</table></div>';
+                layer.bindPopup(popupHtml);
+            }
+        });
+        bounds_group.addLayer(layer_Interchange_17);
+        map.addLayer(layer_Interchange_17);
+        
+        // Copy coordinates function
+        window.copyCoords = function(lat, lng) {
+            var coords = lat + ', ' + lng;
+            navigator.clipboard.writeText(coords).then(function() {
+                alert('✅ Coordinates copied: ' + coords);
+            }).catch(function() {
+                alert('⚠️ Could not copy: ' + coords);
+            });
+        };
+        
+        // ============================================
+        // LAYER CONTROL (Top Right)
+        // ============================================
+        var overlaysTree = [
+            { label: '🔄 Interchange', layer: layer_Interchange_17 },
+            { label: '⭐ Major Features', layer: layer_MajorFeatures_16 },
+            { label: '🛣️ Road_CL', layer: layer_Road_CL_15 },
+            { label: '🔄 Centre Line and Interchange', layer: layer_CentreLineandInterchange_14 },
+            { label: '🏁 Start of Express Way', layer: layer_StartofExpressWay_13 },
+            { label: '📏 Centreline Segments', layer: layer_centreline_segements_12 },
+            { label: '🔴 Center Line Chainage', layer: layer_CenterLineChainage_11 },
+            { label: '🛣️ main_centerline_wgs84', layer: layer_main_centerline_wgs84_10 },
+            { label: '🛣️ Road Main Centre Line', layer: layer_RoadMainCentreLine_9 },
+            { label: '🛣️ Express Way Corridor', layer: layer_ExpressWayCorridor_8 },
+            { label: '🏢 Facility', layer: layer_Facility_7 },
+            { label: '⚽ Sports Facility', layer: layer_SportsFacility_6 },
+            { label: '🅿️ Parking Area', layer: layer_ParkingArea_5 },
+            { label: '🏢 Facility_1', layer: layer_Facility_1_4 },
+            { label: '🌿 Greenlands', layer: layer_greenlands_3 },
+            { label: '🛣️ Corridor Close', layer: layer_CorridorClose_2 },
+            { label: '🛰️ Esri Satellite', layer: layer_EsriSatellite_1 },
+            { label: '🗺️ OpenStreetMap', layer: layer_OpenStreetMap_0 }
+        ];
+        
+        var layerControl = L.control.layers.tree(null, overlaysTree, {
+            collapsed: true,
+            position: 'topright'
+        });
+        layerControl.addTo(map);
+        
+        // ============================================
+        // CUSTOM SEARCH FUNCTIONALITY
+        // ============================================
+        // Build search index from Interchange and Major Features
+        var searchIndex = [];
+        
+        // Add Interchanges to search index
+        layer_Interchange_17.eachLayer(function(layer) {
+            var name = layer.feature.properties.Text;
+            if (name) {
+                searchIndex.push({
+                    name: name,
+                    type: 'interchange',
+                    typeLabel: 'Interchange',
+                    layer: layer,
+                    latlng: layer.getLatLng()
+                });
+            }
+        });
+        
+        // Add Major Features to search index
+        layer_MajorFeatures_16.eachLayer(function(layer) {
+            var name = layer.feature.properties.Text;
+            if (name) {
+                searchIndex.push({
+                    name: name,
+                    type: 'major',
+                    typeLabel: 'Major Feature',
+                    layer: layer,
+                    latlng: layer.getLatLng()
+                });
+            }
+        });
+        
+        // Search functionality
+        var searchInput = document.getElementById('searchInput');
+        var searchResults = document.getElementById('searchResults');
+        var currentMarker = null;
+        
+        function performSearch() {
+            var query = searchInput.value.toLowerCase().trim();
+            searchResults.innerHTML = '';
+            
+            if (query.length === 0) {
+                searchResults.style.display = 'none';
+                return;
+            }
+            
+            var matches = searchIndex.filter(function(item) {
+                return item.name.toLowerCase().indexOf(query) !== -1;
+            });
+            
+            if (matches.length > 0) {
+                searchResults.style.display = 'block';
+                matches.forEach(function(match) {
+                    var div = document.createElement('div');
+                    div.className = 'search-result-item';
+                    var badgeClass = match.type === 'interchange' ? 'interchange' : 'major';
+                    div.innerHTML = '<span class="type-badge ' + badgeClass + '">' + match.typeLabel + '</span> ' + match.name;
+                    div.onclick = function() {
+                        // Zoom to the feature
+                        map.setView(match.latlng, 16);
+                        // Open popup
+                        match.layer.openPopup();
+                        // Clear search
+                        searchInput.value = '';
+                        searchResults.style.display = 'none';
+                        // Flash the marker
+                        if (currentMarker) {
+                            map.removeLayer(currentMarker);
+                        }
+                        currentMarker = L.circleMarker(match.latlng, {
+                            radius: 12,
+                            color: '#ff0000',
+                            weight: 3,
+                            fillColor: '#ffff00',
+                            fillOpacity: 0.7
+                        }).addTo(map);
+                        setTimeout(function() {
+                            if (currentMarker) {
+                                map.removeLayer(currentMarker);
+                                currentMarker = null;
+                            }
+                        }, 2000);
+                    };
+                    searchResults.appendChild(div);
+                });
+            } else {
+                searchResults.style.display = 'block';
+                var noResult = document.createElement('div');
+                noResult.className = 'search-result-item';
+                noResult.innerHTML = 'No results found for "' + query + '"';
+                noResult.style.color = '#999';
+                noResult.onclick = null;
+                searchResults.appendChild(noResult);
+            }
+        }
+        
+        searchInput.addEventListener('input', performSearch);
+        searchInput.addEventListener('blur', function() {
+            setTimeout(function() {
+                searchResults.style.display = 'none';
+            }, 200);
+        });
+        searchInput.addEventListener('focus', function() {
+            if (searchInput.value.length > 0) {
+                performSearch();
+            }
+        });
+        
+        // ============================================
+        // PHOTON ADDRESS SEARCH - Top Right
+        // ============================================
+        var photonControl = L.control.photon({
+            url: "https://nominatim.openstreetmap.org/search?format=geojson&addressdetails=1&",
+            position: 'topright',
+            includePosition: true,
+            feedbackLabel: ''
+        }).addTo(map);
+        
+        // Style photon search to match
+        setTimeout(function() {
+            var photonContainer = document.querySelector('.leaflet-photon');
+            if (photonContainer) {
+                photonContainer.style.backgroundColor = 'white';
+                photonContainer.style.borderRadius = '4px';
+                photonContainer.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
+                photonContainer.style.padding = '2px';
+                var input = photonContainer.querySelector('input');
+                if (input) {
+                    input.style.border = '1px solid #ccc';
+                    input.style.borderRadius = '3px';
+                    input.style.padding = '6px 10px';
+                    input.style.width = '200px';
+                    input.placeholder = '🔍 Search address...';
+                }
+            }
+        }, 500);
+        
+        // ============================================
+        // BIND TOOLTIPS
+        // ============================================
+        layer_CenterLineChainage_11.eachLayer(function(layer) {
+            var chainage = layer.feature.properties.chainage_l;
+            if (chainage) {
+                layer.bindTooltip(chainage.replace('Km', ''), {
+                    permanent: true,
+                    direction: 'top',
+                    offset: [0, -10],
+                    className: 'chainage-tooltip'
+                });
+            }
+        });
+        
+        layer_MajorFeatures_16.eachLayer(function(layer) {
+            var name = layer.feature.properties.Text;
+            if (name) {
+                layer.bindTooltip('⭐ ' + name, {
+                    permanent: true,
+                    direction: 'top',
+                    offset: [0, -12],
+                    className: 'feature-tooltip'
+                });
+            }
+        });
+        
+        layer_Interchange_17.eachLayer(function(layer) {
+            var name = layer.feature.properties.Text;
+            if (name) {
+                layer.bindTooltip('🔄 ' + name, {
+                    permanent: true,
+                    direction: 'top',
+                    offset: [0, -12],
+                    className: 'feature-tooltip'
+                });
+            }
+        });
+        
+        // ============================================
+        // ZOOM CONTROL - Hide labels until zoom level 14
+        // ============================================
+        function hideLabelsUntilZoom() {
+            var zoom = map.getZoom();
+            var minZoom = 14;
+            var tooltips = document.querySelectorAll('.leaflet-tooltip');
+            tooltips.forEach(function(t) {
+                if (zoom >= minZoom) {
+                    t.style.display = '';
+                    t.style.opacity = '1';
+                    t.style.visibility = 'visible';
+                } else {
+                    t.style.display = 'none';
+                    t.style.opacity = '0';
+                    t.style.visibility = 'hidden';
+                }
+            });
+        }
+        
+        map.on('zoomend', hideLabelsUntilZoom);
+        setTimeout(hideLabelsUntilZoom, 500);
+        setTimeout(hideLabelsUntilZoom, 1000);
+        
+        console.log('Map ready. Search index built with ' + searchIndex.length + ' items.');
+        </script>
+    </body>
+</html>
